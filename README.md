@@ -24,8 +24,8 @@ tunnel IP only (plus an app-level IP allowlist + login as defense in depth).
 
 ```bash
 git clone <this-repo> dns-vpn-stack   # or just upload the folder
-cd dns-vpn-stack
-chmod +x install.sh scripts/*.sh scripts/*.py
+cd PDNS
+chmod +x install.sh uninstall.sh scripts/*.sh scripts/*.py
 sudo ./install.sh
 ```
 
