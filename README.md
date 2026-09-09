@@ -23,7 +23,7 @@ tunnel IP only (plus an app-level IP allowlist + login as defense in depth).
 ## Install (on a fresh Debian/Ubuntu VPS, as root)
 
 ```bash
-git clone <this-repo> dns-vpn-stack   # or just upload the folder
+git clone https://github.com/abirsiddiky/PDNS.git   # or just upload the folder
 cd PDNS
 chmod +x install.sh uninstall.sh scripts/*.sh scripts/*.py
 sudo ./install.sh
