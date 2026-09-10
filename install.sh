@@ -181,6 +181,15 @@ elif command -v pihole-FTL >/dev/null 2>&1; then
     warn "Couldn't set Pi-hole's webserver ACL — its admin UI may be reachable outside the tunnel too."
 fi
 pihole -a -p "${ADMIN_PASS}"
+
+# Known Pi-hole v6 quirk: its embedded (CivetWeb) webserver can 404 on
+# /admin/ even though the files exist — usually a directory-traversal
+# permission issue on /var/www, or the port config not taking. Both
+# fixes below are non-interactive and harmless to re-apply.
+# See: https://discourse.pi-hole.net/t/update-to-version-6-404-for-admin-site/76046
+chmod 755 /var/www /var/www/html 2>/dev/null || true
+pihole-FTL --config webserver.port "80o,443os,[::]:80o,[::]:443os" 2>/dev/null || true
+
 systemctl restart pihole-FTL 2>/dev/null || true
 sleep 2   # give FTL's embedded webserver a moment to come back up
 
@@ -293,8 +302,29 @@ if [[ "$RUN_HEALTHCHECK" == "yes" ]]; then
   check "Pi-hole FTL service is active"                systemctl is-active --quiet pihole-FTL
   check "Pi-hole resolves (via ${WG_SERVER_IP}:53)" \
         bash -c "dig @${WG_SERVER_IP} cloudflare.com +time=3 +tries=1 +short | grep -q ."
-  check "Pi-hole admin UI responds (${WG_SERVER_IP}:80)" \
-        bash -c "for i in 1 2 3; do code=\$(curl -s -o /dev/null -w '%{http_code}' --max-time 4 -kL http://${WG_SERVER_IP}/admin/); echo \"\$code\" | grep -qE '^(2|3|401)' && exit 0; sleep 2; done; exit 1"
+  ADMIN_UI_OK=0
+  ADMIN_CODE="000"
+  for i in 1 2 3; do
+    ADMIN_CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 4 -kL "http://${WG_SERVER_IP}/admin/" 2>/dev/null || echo "000")
+    if echo "$ADMIN_CODE" | grep -qE '^(2|3|401)'; then ADMIN_UI_OK=1; break; fi
+    sleep 2
+  done
+  if [[ "$ADMIN_UI_OK" -eq 1 ]]; then
+    printf "  \033[1;32m✔\033[0m Pi-hole admin UI responds (${WG_SERVER_IP}:80)\n"
+  else
+    printf "  \033[1;31m✘\033[0m Pi-hole admin UI responds (${WG_SERVER_IP}:80) [HTTP %s]\n" "$ADMIN_CODE"
+    HC_FAILED=1
+  fi
+  if [[ "$ADMIN_UI_OK" -eq 0 ]] && command -v pihole >/dev/null 2>&1; then
+    # Known cause: the "web" component sometimes doesn't actually get
+    # pulled to v6 alongside core/FTL, and 404s as a result.
+    WEB_VER_LINE=$(pihole -v 2>/dev/null | grep -i '^Web version' || true)
+    if [[ -n "$WEB_VER_LINE" ]]; then
+      warn "Pi-hole reports: ${WEB_VER_LINE}"
+      warn "If that shows v5.x while Core/FTL show v6.x, the web interface didn't"
+      warn "actually update — run: sudo pihole -r  (choose Repair) to fix it."
+    fi
+  fi
   check "dns-vpn-ui service is active"                 systemctl is-active --quiet dns-vpn-ui
   check "Custom web UI responds (${WG_SERVER_IP}:${WEBUI_PORT})" \
         bash -c "curl -fsS -o /dev/null --max-time 3 http://${WG_SERVER_IP}:${WEBUI_PORT}/login.php"
