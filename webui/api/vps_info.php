@@ -33,8 +33,8 @@ $memAvail = $mem['MemAvailable'] ?? 0;
 $memUsed = $memTotal - $memAvail;
 
 // --- Disk (root fs) ---
-$diskTotal = @disk_total_space('/') ?: 0;
-$diskFree  = @disk_free_space('/') ?: 0;
+$diskTotal = (int) (@disk_total_space('/') ?: 0);
+$diskFree  = (int) (@disk_free_space('/') ?: 0);
 $diskUsed  = $diskTotal - $diskFree;
 
 // --- Uptime ---
